@@ -30,26 +30,32 @@ ps = PorterStemmer()
 tag_re = re.compile(r'<[^>]+>')
 
 def scrapper(query_string, num_of_pages, stop_at):
-    document = []
-    for search_results in search(query_string, tld="com", num=num_of_pages, stop=stop_at, pause=2):
-        try:
-            html = urlopen(search_results).read()
-            soup = BeautifulSoup(html, features="html.parser")
-            document.append(soup.body)
-        except:
-            pass
-    return (document)
+    try:
+        document = []
+        for search_results in search(query_string, tld="com", num=num_of_pages, stop=stop_at, pause=2):
+            try:
+                html = urlopen(search_results).read()
+                soup = BeautifulSoup(html, features="html.parser")
+                document.append(soup.body)
+            except:
+                pass
+        return (document)
+    except:
+        print('Error: Scrapper not working')
 
 def cleaner(x): 
-    brackets_removed = tag_re.sub('', str(x))
-    new_line_removed = str(brackets_removed).replace(r'\n', ' ')
-    email_removed = re.sub(r'[A-Za-z0-9]*@[A-Za-z]*\.?[A-Za-z0-9]*', ' ', new_line_removed)
-    symbols_removed = re.sub('[^A-Za-z0-9]+', ' ', email_removed)
-    clean_data = re.sub(r"(^|\W)\d+", ' ', symbols_removed)  
-    clean_data = lemmatizer.lemmatize(clean_data)
-    clean_data = ps.stem(clean_data)
-    clean_data = clean_data.replace('\n','')
-    return clean_data
+    try:
+        brackets_removed = tag_re.sub('', str(x))
+        new_line_removed = str(brackets_removed).replace(r'\n', ' ')
+        email_removed = re.sub(r'[A-Za-z0-9]*@[A-Za-z]*\.?[A-Za-z0-9]*', ' ', new_line_removed)
+        symbols_removed = re.sub('[^A-Za-z0-9]+', ' ', email_removed)
+        clean_data = re.sub(r"(^|\W)\d+", ' ', symbols_removed)  
+        clean_data = lemmatizer.lemmatize(clean_data)
+        clean_data = ps.stem(clean_data)
+        clean_data = clean_data.replace('\n','')
+        return clean_data
+    except:
+        print('Error: Cleaner not working')
 
 def keyword_extractor(method, corpus, top_n, max_ngram_size):
     try:
@@ -59,7 +65,7 @@ def keyword_extractor(method, corpus, top_n, max_ngram_size):
             yake_keys = [word[0] for word in yake_keywords]
             return yake_keys
         else:
-            print('Extractor not found!')
+            print('Error: Extractor not found!')
 
     except:
         # Slow Keyword Extractor
@@ -74,24 +80,27 @@ def keyword_extractor(method, corpus, top_n, max_ngram_size):
         return list(dict(keybert_keywords).keys())
 
 def driver(query_string, num_of_pages, stop_at, top_n_words, grams, method):
-    data = []
-    for query in query_string:
-        document = scrapper(query, num_of_pages, stop_at)
-        ngrams  = []
-        for doc in range(len(document)):
-            ngrams.append(keyword_extractor(method, cleaner(document[doc]), top_n_words, grams))
+    try:
+        data = []
+        for query in query_string:
+            document = scrapper(query, num_of_pages, stop_at)
+            ngrams  = []
+            for doc in range(len(document)):
+                ngrams.append(keyword_extractor(method, cleaner(document[doc]), top_n_words, grams))
 
-        n_keywords = [ngram for ngram_list in ngrams for ngram in ngram_list]
-        n_keywords = list(filter(lambda x: set(x.split(' ')).isdisjoint(stop_words), n_keywords))
+            n_keywords = [ngram for ngram_list in ngrams for ngram in ngram_list]
+            n_keywords = list(filter(lambda x: set(x.split(' ')).isdisjoint(stop_words), n_keywords))
 
-        keys = [[common_keywords, n_keywords.count(common_keywords)] for common_keywords in set(n_keywords)] 
-        keyword_freq = pd.DataFrame(keys, columns=['Keyword', 'Freq']).sort_values(by='Freq', ascending=False).reset_index(drop=True)
-        keyword_freq = keyword_freq[keyword_freq["Freq"] > 3]
-        keyword_freq['Query'] = query
-        data.append(keyword_freq)
+            keys = [[common_keywords, n_keywords.count(common_keywords)] for common_keywords in set(n_keywords)] 
+            keyword_freq = pd.DataFrame(keys, columns=['Keyword', 'Freq']).sort_values(by='Freq', ascending=False).reset_index(drop=True)
+            keyword_freq = keyword_freq[keyword_freq["Freq"] > 3]
+            keyword_freq['Query'] = query
+            data.append(keyword_freq)
 
-    final_keys = pd.concat(data)
-    return final_keys.to_dict('records')
+        final_keys = pd.concat(data)
+        return final_keys.to_dict('records')
+    except:
+        print('Error: Driver not responding')
 
 def lambda_handler(event, context):
     query_string = event['query_string']
